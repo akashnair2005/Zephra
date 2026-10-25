@@ -53,7 +53,7 @@ Zephra is a responsive environmental intelligence web application built with Rea
 
 ---
 
-## 4. Windows Setup Instructions
+## 4. Local Development and Production Build
 
 ### Prerequisites
 * **Node.js**: v18.0.0 or later installed on Windows.
@@ -61,14 +61,14 @@ Zephra is a responsive environmental intelligence web application built with Rea
 
 ### Step-by-Step Terminal Commands (PowerShell / Command Prompt)
 
-```powershell
+```bash
 # 1. Clone or navigate into the project directory
-cd aero-shift
+cd Zephra
 
 # 2. Install all dependencies
 npm install
 
-# 3. Run unit tests to verify the scoring engine
+# 3. Run unit tests
 npm test
 
 # 4. Start the Vite development server
@@ -76,17 +76,35 @@ npm run dev
 
 Vite will print a local URL, usually http://localhost:5173/. Open it in Chrome, Edge, or Firefox.
 
-Production Build
-
+# 5. Create and preview the production build
 npm run build
 npm run preview
+```
 
-5. 2-to-3 Minute Demonstration Sequence for Judges
+Vite prints a local URL, usually `http://localhost:5173/`. The production build is written to `dist/`.
+
+Zephra does not require a backend, private API key, or local absolute filesystem path. Runtime forecast and geocoding requests use the public Open-Meteo APIs documented above.
+
+## 5. Vercel Deployment
+
+Zephra is a standard Vite application. Use the repository root and these Vercel settings:
+
+| Setting | Value |
+|---|---|
+| Framework Preset | Vite |
+| Root Directory | Repository root |
+| Install Command | `npm install` |
+| Build Command | `npm run build` |
+| Output Directory | `dist` |
+
+No environment variables are required for the current application. See [VERCEL_DEPLOYMENT.md](./VERCEL_DEPLOYMENT.md) for the complete import and verification checklist.
+
+## 6. 2-to-3 Minute Demonstration Sequence for Judges
 
 1.  Homepage Overview (30s):
       - Open http://localhost:5173/.
       - Highlight the USP banner: "Find a better time to step outside."
-      - Point out the primary location (London), the 6 individual pollutant
+      - Point out the configured primary location (for example, Bengaluru), the 6 individual pollutant
         cards with correct units (µg/m³), and the hourly forecast trend chart.
 2.  Search & Multi-Location Comparison (45s):
       - Use the search bar to add two more locations (e.g., Paris and Delhi).
@@ -106,7 +124,7 @@ npm run preview
       - Open the Methodology tab to show CAMS ENSEMBLE citations, spatial
         resolution disclosures (0.1° vs 0.4°), and CC BY 4.0 licensing.
 
-6. Attributions & Disclaimers
+## 7. Attributions & Disclaimers
 
   - Data Provider: Open-Meteo (https://open-meteo.com/)
   - Atmospheric Forecasts: Copernicus Atmosphere Monitoring Service (CAMS)
@@ -119,7 +137,7 @@ npm run preview
 
 ---
 
-## 10. Implementation & Handover Summary
+## 8. Implementation & Handover Summary
 
 ### What Has Been Implemented:
 1. **Full Modular Architecture:** 18 distinct source files covering components, pages, services, algorithms, configuration, and unit tests.
