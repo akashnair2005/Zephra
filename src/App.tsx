@@ -79,6 +79,14 @@ export const App: React.FC = () => {
     setLocations(prev => prev.filter(l => l.location.id !== id));
   };
 
+  const handleSetPrimaryLocation = (id: number) => {
+    setLocations(prev => {
+      const primary = prev.find(location => location.location.id === id);
+      if (!primary) return prev;
+      return [primary, ...prev.filter(location => location.location.id !== id)];
+    });
+  };
+
   const handleRefresh = async () => {
     const refreshed = await Promise.all(locations.map(l => loadLocationData(l.location)));
     setLocations(refreshed);
@@ -115,6 +123,7 @@ export const App: React.FC = () => {
                 locations={locations}
                 onAddLocation={handleAddLocation}
                 onRemoveLocation={handleRemoveLocation}
+                onSetPrimaryLocation={handleSetPrimaryLocation}
                 onNavigateToPlanner={() => setActiveTab("planner")}
               />
             )}

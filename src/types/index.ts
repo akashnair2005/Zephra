@@ -61,6 +61,7 @@ export interface LocationAirQualityState {
 }
 
 export type AddLocationResult = string | void;
+export type PlannerMode = "primary" | "compare";
 
 export interface CandidateSlot {
   locationId: number;

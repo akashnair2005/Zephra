@@ -1,5 +1,5 @@
 import { APP_CONFIG, PollutantKey, ActivityId } from "../config/appConfig";
-import { LocationAirQualityState, CandidateSlot, RankedRecommendation } from "../types";
+import { LocationAirQualityState, CandidateSlot, RankedRecommendation, PlannerMode } from "../types";
 import { getCurrentTimeKey, getTimeKey, getTimeKeyAfterHours } from "./time";
 
 /**
@@ -43,10 +43,33 @@ export function extractCandidateSlots(
           rawValues: { ...pollutantsMap }
         });
       }
+
     }
   }
 
   return candidates;
+}
+
+export function getPlannerLocations(
+  locations: LocationAirQualityState[],
+  mode: PlannerMode
+): LocationAirQualityState[] {
+  return mode === "primary" ? locations.slice(0, 1) : locations;
+}
+
+export function groupRankedRecommendations(
+  recommendations: RankedRecommendation[]
+): Array<{ locationId: number; locationName: string; recommendations: RankedRecommendation[] }> {
+  const groups = new Map<number, { locationId: number; locationName: string; recommendations: RankedRecommendation[] }>();
+
+  for (const recommendation of recommendations) {
+    const { locationId, locationName } = recommendation.candidate;
+    const group = groups.get(locationId) || { locationId, locationName, recommendations: [] };
+    group.recommendations.push(recommendation);
+    groups.set(locationId, group);
+  }
+
+  return Array.from(groups.values());
 }
 
 /**

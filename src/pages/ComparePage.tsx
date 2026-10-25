@@ -10,6 +10,7 @@ interface ComparePageProps {
   locations: LocationAirQualityState[];
   onAddLocation: (loc: GeoLocationItem) => AddLocationResult | Promise<AddLocationResult>;
   onRemoveLocation: (id: number) => void;
+  onSetPrimaryLocation: (id: number) => void;
   onNavigateToPlanner: () => void;
 }
 
@@ -17,6 +18,7 @@ export const ComparePage: React.FC<ComparePageProps> = ({
   locations,
   onAddLocation,
   onRemoveLocation,
+  onSetPrimaryLocation,
   onNavigateToPlanner
 }) => {
   const canAddMore = locations.length < APP_CONFIG.maxLocations;
@@ -80,6 +82,15 @@ export const ComparePage: React.FC<ComparePageProps> = ({
                   </button>
                 )}
               </div>
+
+              <button
+                type="button"
+                onClick={() => onSetPrimaryLocation(loc.location.id)}
+                disabled={idx === 0}
+                className="mt-3 rounded-md border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-[11px] font-bold text-emerald-800 disabled:cursor-default disabled:opacity-70"
+              >
+                {idx === 0 ? "Primary location" : "Set as primary"}
+              </button>
 
               <h3 className="mt-2 text-lg font-bold text-slate-900">{loc.location.name}</h3>
               <p className="text-xs text-slate-500">

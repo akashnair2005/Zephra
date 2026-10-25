@@ -1,10 +1,10 @@
-import React, { useState, useMemo } from 'react';
-import { Footprints, Bike, Flame, Dumbbell, Compass, Clock, Award, Info, AlertTriangle, ArrowRight } from 'lucide-react';
-import { APP_CONFIG, ActivityId } from '../config/appConfig';
-import { LocationAirQualityState, RankedRecommendation } from '../types';
-import { extractCandidateSlots, rankOutdoorCandidates } from '../utils/scoring';
-import { getScoreBadgeClass, formatPollutantValue } from '../utils/formatting';
-import { CandidateBreakdownModal } from './CandidateBreakdownModal';
+import React, { useMemo, useState } from "react";
+import { AlertTriangle, ArrowRight, Award, Bike, Clock, Compass, Dumbbell, Flame, Footprints, Info } from "lucide-react";
+import { APP_CONFIG, ActivityId } from "../config/appConfig";
+import { LocationAirQualityState, PlannerMode, RankedRecommendation } from "../types";
+import { extractCandidateSlots, getPlannerLocations, groupRankedRecommendations, rankOutdoorCandidates } from "../utils/scoring";
+import { formatPollutantValue, getScoreBadgeClass } from "../utils/formatting";
+import { CandidateBreakdownModal } from "./CandidateBreakdownModal";
 
 interface ActivityPlannerProps {
   locations: LocationAirQualityState[];
@@ -13,236 +13,129 @@ interface ActivityPlannerProps {
 export const ActivityPlanner: React.FC<ActivityPlannerProps> = ({ locations }) => {
   const [selectedActivity, setSelectedActivity] = useState<ActivityId>("walking");
   const [planningWindow, setPlanningWindow] = useState<6 | 12 | 24>(12);
+  const [plannerMode, setPlannerMode] = useState<PlannerMode>("primary");
   const [inspectedCandidate, setInspectedCandidate] = useState<RankedRecommendation | null>(null);
+  const primaryLocation = locations[0];
 
-  // Extract valid future candidates & rank them transparently
   const recommendations = useMemo(() => {
-    const candidates = extractCandidateSlots(locations, planningWindow);
+    const candidates = extractCandidateSlots(getPlannerLocations(locations, plannerMode), planningWindow);
     return rankOutdoorCandidates(candidates, selectedActivity);
-  }, [locations, planningWindow, selectedActivity]);
+  }, [locations, plannerMode, planningWindow, selectedActivity]);
 
   const topRecommendations = recommendations.slice(0, 5);
+  const recommendationGroups = useMemo(
+    () => groupRankedRecommendations(recommendations).map(group => ({
+      ...group,
+      recommendations: group.recommendations.slice(0, 5)
+    })),
+    [recommendations]
+  );
+  const hasAnyLocation = locations.some(location => !location.error && location.hourlySlots.length > 0);
 
   const getActivityIcon = (id: ActivityId) => {
     switch (id) {
-      case "walking": return <Footprints className="w-4 h-4" />;
-      case "cycling": return <Bike className="w-4 h-4" />;
-      case "jogging": return <Flame className="w-4 h-4" />;
-      case "exercise": return <Dumbbell className="w-4 h-4" />;
-      default: return <Compass className="w-4 h-4" />;
+      case "walking": return <Footprints className="h-4 w-4" />;
+      case "cycling": return <Bike className="h-4 w-4" />;
+      case "jogging": return <Flame className="h-4 w-4" />;
+      case "exercise": return <Dumbbell className="h-4 w-4" />;
+      default: return <Compass className="h-4 w-4" />;
     }
   };
 
-  const hasAnyLocation = locations.some(l => !l.error && l.hourlySlots.length > 0);
+  const renderRecommendation = (rec: RankedRecommendation) => {
+    const badge = getScoreBadgeClass(rec.relativeScore);
+    const isBest = rec === recommendations[0];
+    return (
+      <article key={`${rec.candidate.locationId}-${rec.candidate.isoTime}`} className={`panel-card border-t-2 p-4 ${isBest ? "border-emerald-400 ring-2 ring-emerald-500/20" : "border-slate-200"}`}>
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <div className="flex items-center gap-2">
+              <span className={`flex h-8 w-8 items-center justify-center rounded-lg text-xs font-bold ${isBest ? "bg-emerald-900 text-white" : "bg-slate-100 text-slate-700"}`}>#{rec.rank}</span>
+              <h4 className="text-sm font-bold text-slate-900">{rec.candidate.locationName}</h4>
+            </div>
+            <p className="mt-2 flex items-center text-xs text-slate-500"><Clock className="mr-1 h-3.5 w-3.5 text-teal-600" />{rec.candidate.formattedDate} at {rec.candidate.formattedTime}</p>
+          </div>
+          {isBest && <Award className="h-5 w-5 text-emerald-700" />}
+        </div>
+        <div className="mt-4 grid grid-cols-3 gap-2 rounded-lg bg-indigo-50 p-3 text-center">
+          <span><small className="block text-[9px] uppercase text-slate-500">PM2.5</small><strong className="text-sm">{formatPollutantValue(rec.candidate.pollutants.pm2_5)}</strong></span>
+          <span><small className="block text-[9px] uppercase text-slate-500">PM10</small><strong className="text-sm">{formatPollutantValue(rec.candidate.pollutants.pm10)}</strong></span>
+          <span><small className="block text-[9px] uppercase text-slate-500">NO₂</small><strong className="text-sm">{formatPollutantValue(rec.candidate.pollutants.nitrogen_dioxide)}</strong></span>
+        </div>
+        <div className="mt-3 flex items-center justify-between">
+          <span className={`rounded-full border px-2 py-1 text-xs font-bold ${badge.bg} ${badge.text} ${badge.border}`}>{rec.relativeScore} / 100</span>
+          <button type="button" onClick={() => setInspectedCandidate(rec)} className="inline-flex items-center rounded-md bg-slate-100 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-200">
+            Inspect Data <ArrowRight className="ml-1 h-3.5 w-3.5" />
+          </button>
+        </div>
+        <p className="mt-3 border-t border-slate-100 pt-3 text-xs leading-relaxed text-slate-600">{rec.explanation}</p>
+      </article>
+    );
+  };
 
   return (
-    <div className="space-y-6">
-      {/* Configuration Controls Bar */}
-      <div className="panel-card space-y-6 p-5">
+    <div className="space-y-5">
+      <section className="panel-card space-y-5 p-5">
         <div>
           <h2 className="text-lg font-bold tracking-tight text-slate-900">Planner parameters setup</h2>
-          <p className="text-xs text-slate-500 mt-1">
-            Select your intended outdoor activity and look-ahead planning window. The engine ranks candidate hours across your selected locations using multi-pollutant relative scoring.
-          </p>
+          <p className="mt-1 text-xs text-slate-500">Choose an activity, forecast window, and location scope. Scores remain project-defined relative comparisons.</p>
         </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4 border-t border-slate-100">
-          {/* Activity Selector */}
+        <div className="rounded-lg border border-emerald-200 bg-emerald-50/60 p-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="eyebrow">Planning location</p>
+              <p className="mt-1 text-sm font-bold text-emerald-950">{primaryLocation ? `${primaryLocation.location.name}${primaryLocation.location.admin1 ? `, ${primaryLocation.location.admin1}` : ""}` : "No location selected"}</p>
+              <p className="mt-1 text-xs text-emerald-900/70">{plannerMode === "primary" ? "Recommendations use this primary location only." : "Recommendations compare the locations currently selected in Zephra."}</p>
+            </div>
+            <div className="flex rounded-md border border-emerald-200 bg-white p-1" role="group" aria-label="Planner location scope">
+              <button type="button" onClick={() => setPlannerMode("primary")} className={`rounded px-3 py-2 text-xs font-bold ${plannerMode === "primary" ? "bg-emerald-950 text-white" : "text-emerald-900 hover:bg-emerald-50"}`}>My Location</button>
+              <button type="button" onClick={() => setPlannerMode("compare")} disabled={locations.length < 2} className={`rounded px-3 py-2 text-xs font-bold ${plannerMode === "compare" ? "bg-emerald-950 text-white" : "text-emerald-900 hover:bg-emerald-50"} disabled:cursor-not-allowed disabled:opacity-50`}>Compare Selected Locations</button>
+            </div>
+          </div>
+        </div>
+        <div className="grid grid-cols-1 gap-5 border-t border-slate-100 pt-4 md:grid-cols-2">
           <div>
-            <label className="eyebrow mb-2 block">
-              1. Choose Activity
-            </label>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-              {APP_CONFIG.activities.map(act => (
-                <button
-                  key={act.id}
-                  onClick={() => setSelectedActivity(act.id)}
-                  className={`flex flex-col items-start p-3 rounded-xl border text-left transition-all ${
-                    selectedActivity === act.id
-                      ? "border-teal-500 bg-teal-50/70 text-teal-900 shadow-sm ring-1 ring-teal-500"
-                      : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
-                  }`}
-                >
-                  <div className={`p-1.5 rounded-lg mb-2 ${selectedActivity === act.id ? "bg-teal-600 text-white" : "bg-slate-100 text-slate-600"}`}>
-                    {getActivityIcon(act.id)}
-                  </div>
-                  <span className="text-xs font-bold leading-tight">{act.label}</span>
-                  <span className="text-[10px] text-slate-500 mt-1">{act.metabolicIntensity} intensity</span>
+            <label className="eyebrow mb-2 block">1. Choose Activity</label>
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+              {APP_CONFIG.activities.map(activity => (
+                <button key={activity.id} type="button" onClick={() => setSelectedActivity(activity.id)} className={`flex flex-col items-start rounded-xl border p-3 text-left ${selectedActivity === activity.id ? "border-teal-500 bg-teal-50 text-teal-900 ring-1 ring-teal-500" : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"}`}>
+                  <span className="mb-2 rounded-lg bg-slate-100 p-1.5">{getActivityIcon(activity.id)}</span>
+                  <span className="text-xs font-bold">{activity.label}</span>
+                  <span className="mt-1 text-[10px] text-slate-500">{activity.metabolicIntensity} intensity</span>
                 </button>
               ))}
             </div>
           </div>
-
-          {/* Window Selector */}
           <div>
-            <label className="eyebrow mb-2 block">
-              2. Planning Window
-            </label>
+            <label className="eyebrow mb-2 block">2. Planning Window</label>
             <div className="grid grid-cols-3 gap-2">
-              {APP_CONFIG.windows.map(w => (
-                <button
-                  key={w}
-                  onClick={() => setPlanningWindow(w)}
-                  className={`py-3 px-4 rounded-xl border text-center transition-all ${
-                    planningWindow === w
-                      ? "border-emerald-500 bg-emerald-50/70 text-emerald-900 shadow-sm ring-1 ring-emerald-500 font-bold"
-                      : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50 font-medium"
-                  }`}
-                >
-                  <div className="text-sm">Next {w}h</div>
-                  <div className="text-[10px] text-slate-500 mt-0.5">Forecast horizon</div>
+              {APP_CONFIG.windows.map(windowHours => (
+                <button key={windowHours} type="button" onClick={() => setPlanningWindow(windowHours)} className={`rounded-xl border px-3 py-3 text-center ${planningWindow === windowHours ? "border-emerald-500 bg-emerald-50 font-bold text-emerald-900 ring-1 ring-emerald-500" : "border-slate-200 bg-white text-slate-700"}`}>
+                  <div className="text-sm">Next {windowHours}h</div><div className="mt-0.5 text-[10px] text-slate-500">Forecast horizon</div>
                 </button>
               ))}
             </div>
-
-            <div className="mt-4 p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs text-slate-600 flex items-start space-x-2">
-              <Info className="w-4 h-4 text-teal-600 shrink-0 mt-0.5" />
-              <span>
-                Comparing candidate hours against the selected {locations.length} active location{locations.length > 1 ? "s" : ""}. Past hours are automatically excluded.
-              </span>
-            </div>
+            <p className="mt-4 flex items-start gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600"><Info className="h-4 w-4 shrink-0 text-teal-600" />{plannerMode === "primary" ? `Evaluating ${primaryLocation?.location.name || "your primary location"} only.` : `Comparing ${locations.length} selected locations.`} Past hours are excluded.</p>
           </div>
         </div>
-      </div>
+      </section>
 
-      {/* Recommendations Feed */}
-      <div>
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <h3 className="text-base font-bold text-slate-900">
-              Ranked Location & Time Windows ({topRecommendations.length} Options)
-            </h3>
-            <p className="text-xs text-slate-500">
-              Evaluated using transparent Relative Pollution Scores (Lower = comparatively lower pollution).
-            </p>
-          </div>
+      <section>
+        <div className="mb-4">
+          <h3 className="text-base font-bold text-slate-900">{plannerMode === "primary" ? `Best available times in ${primaryLocation?.location.name || "your location"}` : "Best available times across selected locations"} ({topRecommendations.length} options)</h3>
+          <p className="text-xs text-slate-500">Lower Relative Pollution Score means comparatively lower pollution within the selected candidate set.</p>
         </div>
-
         {!hasAnyLocation ? (
-          <div className="bg-white rounded-2xl border border-slate-200 p-12 text-center">
-            <Compass className="w-10 h-10 text-slate-300 mx-auto mb-3" />
-            <h4 className="text-base font-semibold text-slate-800">No Location Selected</h4>
-            <p className="text-xs text-slate-500 max-w-md mx-auto mt-1">
-              Add at least one location from the search bar to inspect forecasts and receive outdoor activity recommendations.
-            </p>
-          </div>
+          <div className="panel-card p-10 text-center"><Compass className="mx-auto mb-3 h-10 w-10 text-slate-300" /><h4 className="font-semibold text-slate-800">No Location Selected</h4><p className="mt-1 text-xs text-slate-500">Search for a location or use device location before planning.</p></div>
         ) : topRecommendations.length === 0 ? (
-          <div className="bg-amber-50 border border-amber-200 rounded-2xl p-8 text-center">
-            <AlertTriangle className="w-8 h-8 text-amber-600 mx-auto mb-2" />
-            <h4 className="text-sm font-bold text-amber-900">No Valid Candidate Windows Found</h4>
-            <p className="text-xs text-amber-700 max-w-lg mx-auto mt-1">
-              Available forecast data for your selected location(s) did not satisfy the minimum data requirements (valid PM2.5 + at least 2 other pollutants) in the next {planningWindow} hours.
-            </p>
-          </div>
+          <div className="rounded-2xl border border-amber-200 bg-amber-50 p-8 text-center"><AlertTriangle className="mx-auto mb-2 h-8 w-8 text-amber-600" /><h4 className="text-sm font-bold text-amber-900">No Valid Candidate Windows Found</h4><p className="mx-auto mt-1 max-w-lg text-xs text-amber-700">This location does not have enough valid PM2.5 plus two other pollutant readings in the next {planningWindow} hours.</p></div>
+        ) : plannerMode === "compare" ? (
+          <div className="space-y-5">{recommendationGroups.map(group => <section key={group.locationId} className="rounded-lg border border-slate-200 bg-slate-50/60 p-4"><div className="mb-3 flex items-center justify-between gap-3"><h4 className="text-sm font-bold text-slate-900">{group.locationName} — best forecast time slots</h4>{group.recommendations.includes(recommendations[0]) && <span className="rounded-full bg-emerald-100 px-2 py-1 text-[10px] font-bold uppercase text-emerald-800">Overall leading option</span>}</div><div className="grid grid-cols-1 gap-4 lg:grid-cols-3">{group.recommendations.slice(0, 3).map(renderRecommendation)}</div></section>)}</div>
         ) : (
-          <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-            {topRecommendations.map((rec) => {
-              const badge = getScoreBadgeClass(rec.relativeScore);
-              const isBest = rec.rank === 1;
-
-              return (
-                <div
-                  key={`${rec.candidate.locationId}-${rec.candidate.isoTime}`}
-                  className={`panel-card border-t-2 p-4 transition-all hover:shadow-md ${
-                    isBest ? "border-emerald-400 ring-2 ring-emerald-500/20" : "border-slate-200"
-                  }`}
-                >
-                  <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-                    {/* Location, Rank, and Timing */}
-                    <div className="flex items-start space-x-3.5">
-                      <div className={`w-9 h-9 rounded-xl flex items-center justify-center font-bold text-sm shrink-0 ${
-                        isBest ? "bg-emerald-600 text-white shadow-md shadow-emerald-600/30" : "bg-slate-100 text-slate-700"
-                      }`}>
-                        #{rec.rank}
-                      </div>
-
-                      <div>
-                        <div className="flex items-center space-x-2">
-                          <h4 className="text-base font-bold text-slate-900">
-                            {rec.candidate.locationName}
-                          </h4>
-                          {isBest && (
-                            <span className="inline-flex items-center text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800">
-                              <Award className="w-3 h-3 mr-1" /> Top Choice
-                            </span>
-                          )}
-                        </div>
-
-                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1 text-xs text-slate-500">
-                          <span className="flex items-center font-medium text-slate-700">
-                            <Clock className="w-3.5 h-3.5 mr-1 text-teal-600" />
-                            {rec.candidate.formattedDate} at {rec.candidate.formattedTime}
-                          </span>
-                          <span className="text-slate-300">•</span>
-                          <span>Timezone: {rec.candidate.timezone}</span>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Key Pollutant Concentrations */}
-                    <div className="flex flex-wrap items-center gap-4 py-2 lg:py-0 border-y lg:border-none border-slate-100">
-                      <div>
-                        <span className="text-[10px] uppercase font-semibold text-slate-400 block">PM2.5</span>
-                        <span className="text-sm font-mono font-bold text-slate-800">
-                          {formatPollutantValue(rec.candidate.pollutants.pm2_5)}
-                        </span>
-                      </div>
-                      <div>
-                        <span className="text-[10px] uppercase font-semibold text-slate-400 block">PM10</span>
-                        <span className="text-sm font-mono font-medium text-slate-700">
-                          {formatPollutantValue(rec.candidate.pollutants.pm10)}
-                        </span>
-                      </div>
-                      <div>
-                        <span className="text-[10px] uppercase font-semibold text-slate-400 block">NO₂</span>
-                        <span className="text-sm font-mono font-medium text-slate-700">
-                          {formatPollutantValue(rec.candidate.pollutants.nitrogen_dioxide)}
-                        </span>
-                      </div>
-                      <div>
-                        <span className="text-[10px] uppercase font-semibold text-slate-400 block">O₃</span>
-                        <span className="text-sm font-mono font-medium text-slate-700">
-                          {formatPollutantValue(rec.candidate.pollutants.ozone)}
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Score Badge and Inspect Button */}
-                    <div className="flex items-center justify-between lg:justify-end gap-3">
-                      <div className="text-right">
-                        <span className="text-[10px] uppercase font-semibold text-slate-400 block">Relative Score</span>
-                        <span className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-bold font-mono border ${badge.bg} ${badge.text} ${badge.border}`}>
-                          {rec.relativeScore} / 100
-                        </span>
-                      </div>
-
-                      <button
-                        onClick={() => setInspectedCandidate(rec)}
-                        className="inline-flex items-center px-3 py-2 rounded-xl text-xs font-semibold bg-slate-100 text-slate-700 hover:bg-slate-200 transition-colors"
-                      >
-                        <span>Inspect Data</span>
-                        <ArrowRight className="w-3.5 h-3.5 ml-1" />
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Explainable Text */}
-                  <div className="mt-3 pt-3 border-t border-slate-100 text-xs text-slate-600 flex items-start space-x-1.5">
-                    <Info className="w-3.5 h-3.5 text-teal-600 shrink-0 mt-0.5" />
-                    <p className="leading-relaxed">{rec.explanation}</p>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">{topRecommendations.map(renderRecommendation)}</div>
         )}
-      </div>
-
-      {/* Inspect Forecast Breakdown Modal */}
-      <CandidateBreakdownModal
-        rec={inspectedCandidate}
-        onClose={() => setInspectedCandidate(null)}
-      />
+      </section>
+      <CandidateBreakdownModal rec={inspectedCandidate} onClose={() => setInspectedCandidate(null)} />
     </div>
   );
 };

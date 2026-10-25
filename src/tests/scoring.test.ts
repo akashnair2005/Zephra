@@ -1,8 +1,21 @@
 import { describe, it, expect } from 'vitest';
-import { validateCandidateCompleteness, rankOutdoorCandidates } from '../utils/scoring';
-import { CandidateSlot } from '../types';
+import { validateCandidateCompleteness, rankOutdoorCandidates, getPlannerLocations, groupRankedRecommendations } from '../utils/scoring';
+import { CandidateSlot, LocationAirQualityState } from '../types';
 
 describe('Scoring & Recommendation Engine', () => {
+  const createLocation = (id: number, name: string): LocationAirQualityState => ({
+    location: { id, name, latitude: id, longitude: id, timezone: 'UTC' },
+    fetchedAt: '2026-10-25T00:00:00.000Z',
+    timezone: 'UTC',
+    utcOffsetSeconds: 0,
+    hourlyUnits: {},
+    hourlySlots: [],
+    currentSlot: null,
+    previousSlot: null,
+    isLoading: false,
+    error: null
+  });
+
   const createMockCandidate = (
     name: string,
     isoTime: string,
@@ -94,5 +107,33 @@ describe('Scoring & Recommendation Engine', () => {
     const rankings = rankOutdoorCandidates([slotA, slotB]);
     expect(rankings[0].explanation).toContain('Ranked #1');
     expect(rankings[0].explanation).toContain('4.2 µg/m³');
+  });
+
+  it('scopes My Location mode to the primary location only', () => {
+    const bengaluru = createLocation(1, 'Bengaluru');
+    const chennai = createLocation(2, 'Chennai');
+    expect(getPlannerLocations([bengaluru, chennai], 'primary')).toEqual([bengaluru]);
+  });
+
+  it('updates the scoped location when the primary location changes', () => {
+    const bengaluru = createLocation(1, 'Bengaluru');
+    const chennai = createLocation(2, 'Chennai');
+    expect(getPlannerLocations([chennai, bengaluru], 'primary')[0].location.name).toBe('Chennai');
+  });
+
+  it('scopes Compare Selected Locations mode to explicit selections and groups results', () => {
+    const bengaluru = createLocation(1, 'Bengaluru');
+    const chennai = createLocation(2, 'Chennai');
+    const candidates = [
+      createMockCandidate('Bengaluru', '2026-10-25T10:00:00Z', 5),
+      createMockCandidate('Chennai', '2026-10-25T11:00:00Z', 8)
+    ];
+    candidates[0].locationId = 1;
+    candidates[1].locationId = 2;
+    const rankings = rankOutdoorCandidates(candidates);
+    const groups = groupRankedRecommendations(rankings);
+
+    expect(getPlannerLocations([bengaluru, chennai], 'compare')).toEqual([bengaluru, chennai]);
+    expect(groups.map(group => group.locationName).sort()).toEqual(['Bengaluru', 'Chennai']);
   });
 });

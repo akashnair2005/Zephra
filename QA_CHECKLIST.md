@@ -111,6 +111,19 @@ Date: 2026-10-25
 | Methodology & Data Sources screen | PASS | Methodology route retains Open-Meteo, CAMS, GeoNames, scoring, timezone, missing-data, and health disclaimers in the updated visual shell. |
 | Exact visual pixel parity | NOT TESTED | No automated screenshot-diff baseline was supplied; integration is based on the provided reference screenshots and design tokens. |
 
+## Activity Planner location scope
+
+| Check | Status | Evidence |
+|---|---|---|
+| My Location is the default planner mode | PASS | `ActivityPlanner` initializes `plannerMode` to `primary` and scopes candidates through `getPlannerLocations`. |
+| Primary location only in My Location mode | PASS | Added regression coverage confirming a Bengaluru-primary list excludes Chennai from the scoped location list; `npm.cmd test -- --run` passed. |
+| Primary location can change | PASS | Compare cards now provide “Set as primary”; `App` reorders selected state so the planner follows the chosen location. |
+| Compare Selected Locations is explicit | PASS | Planner provides a separate scope control, disabled until at least two locations exist. |
+| Comparison results are grouped by location | PASS | Added `groupRankedRecommendations` and grouped planner sections with an overall leading-option label. |
+| Existing scoring formula preserved | PASS | `rankOutdoorCandidates` was not rewritten; it receives the correctly scoped candidate set. |
+| Regression suite | PASS | `npm.cmd test -- --run`: 11 tests passed. |
+| Production build | PASS | `npm.cmd run build` completed successfully. |
+
 ## Manual verification steps
 
 1. Open `http://localhost:5173/`.
