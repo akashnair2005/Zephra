@@ -72,6 +72,20 @@ Date: 2026-10-25
 | Modelled-data disclaimer | PASS | Footer visibly stated that the forecast is approximate and not a regulatory or medical diagnostic tool. |
 | Methodology page journey | NOT TESTED | The page content was inspected in source but not opened through the browser. |
 
+## Default Location Change Feature
+
+| Check | Status | Evidence |
+|---|---|---|
+| Default location preference serialization and restoration | PASS | `npm.cmd test`: `defaultLocation.test.ts` covers valid localStorage round-trip and malformed-value rejection. |
+| Existing comparison location becomes primary without duplication | PASS | `npm.cmd test`: reconciliation test confirms the selected location moves to index zero once. |
+| New default preserves comparison locations below the limit | PASS | `npm.cmd test`: reconciliation test confirms a new location is added as primary while existing locations remain. |
+| Three-location maximum remains enforced during default replacement | PASS | `npm.cmd test`: full-list reconciliation test confirms only the previous primary is replaced and the list remains length three. |
+| Forecast is loaded before default state and preference update | PASS | `App.tsx` only updates the shared location list and `zephra-default-location` after a successful non-empty forecast response. |
+| Failed default forecast preserves the previous default | PASS | `App.tsx` returns the API error to the modal without calling state or localStorage update. |
+| Automated regression suite | PASS | `npm.cmd test`: 2 files, 16 tests passed. |
+| Production build | PASS | `npm.cmd run build`: TypeScript check and Vite production build completed; only the existing chunk-size warning was emitted. |
+| Browser change-and-refresh journey | NOT TESTED | No browser automation was available in this validation pass. |
+
 ## Bugs fixed during QA
 
 1. Adding a location while already at the three-location limit silently replaced the last location. The application now keeps the existing list unchanged and displays an explicit error message.

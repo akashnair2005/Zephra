@@ -8,6 +8,7 @@ import { ForecastChart } from '../components/ForecastChart';
 import { AirQualityMap } from '../components/AirQualityMap';
 import { extractCandidateSlots, rankOutdoorCandidates } from '../utils/scoring';
 import { formatPollutantValue } from '../utils/formatting';
+import { DefaultLocationModal } from '../components/DefaultLocationModal';
 
 interface DashboardPageProps {
   locations: LocationAirQualityState[];
@@ -15,6 +16,7 @@ interface DashboardPageProps {
   onRefresh: () => void;
   onNavigateToPlanner: () => void;
   onNavigateToCompare: () => void;
+  onChangeDefaultLocation: (loc: GeoLocationItem) => AddLocationResult | Promise<AddLocationResult>;
 }
 
 export const DashboardPage: React.FC<DashboardPageProps> = ({
@@ -22,9 +24,13 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
   onAddLocation,
   onRefresh,
   onNavigateToPlanner,
-  onNavigateToCompare
+  onNavigateToCompare,
+  onChangeDefaultLocation
 }) => {
   const primary = locations[0];
+  const [isLocationModalOpen, setIsLocationModalOpen] = React.useState(false);
+  const [isSavingDefault, setIsSavingDefault] = React.useState(false);
+  const [defaultLocationError, setDefaultLocationError] = React.useState<string | null>(null);
   const recommendations = rankOutdoorCandidates(extractCandidateSlots(locations, 12));
   const validForecastHours = locations.reduce((total, location) => total + location.hourlySlots.length, 0);
 
@@ -111,12 +117,25 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
               <h2 className="text-2xl font-bold text-slate-900 mt-1">
                 {primary.location.name}
               </h2>
+              <p className="mt-1 text-sm font-semibold text-emerald-800">
+                My Location: {primary.location.name}, {primary.location.admin1 || primary.location.country || "Selected area"}
+              </p>
               <p className="text-xs text-slate-500">
                 {[primary.location.admin1, primary.location.country].filter(Boolean).join(", ")} • Coordinates: {primary.location.latitude.toFixed(2)}°, {primary.location.longitude.toFixed(2)}° • Timezone: {primary.timezone}
               </p>
             </div>
 
             <div className="flex items-center space-x-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setDefaultLocationError(null);
+                  setIsLocationModalOpen(true);
+                }}
+                className="rounded-xl border border-emerald-200 bg-emerald-50 px-3.5 py-2 text-xs font-bold text-emerald-900 hover:bg-emerald-100"
+              >
+                Change
+              </button>
               <button
                 onClick={onRefresh}
                 className="inline-flex items-center px-3.5 py-2 rounded-xl text-xs font-medium bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors"
@@ -126,6 +145,28 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
               </button>
             </div>
           </div>
+
+          {isLocationModalOpen && (
+            <DefaultLocationModal
+              currentLocation={primary.location}
+              isSaving={isSavingDefault}
+              errorMessage={defaultLocationError}
+              onClose={() => {
+                if (!isSavingDefault) setIsLocationModalOpen(false);
+              }}
+              onConfirm={async location => {
+                setIsSavingDefault(true);
+                setDefaultLocationError(null);
+                const result = await onChangeDefaultLocation(location);
+                setIsSavingDefault(false);
+                if (typeof result === "string") {
+                  setDefaultLocationError(result);
+                  return;
+                }
+                setIsLocationModalOpen(false);
+              }}
+            />
+          )}
 
           {/* Error Message if primary failed */}
           {primary.error && (

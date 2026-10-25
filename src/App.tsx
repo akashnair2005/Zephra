@@ -8,6 +8,7 @@ import { MethodologyPage } from './pages/MethodologyPage';
 import { fetchAirQualityData, transformApiResponse } from './services/openMeteoApi';
 import { LocationAirQualityState, GeoLocationItem, AddLocationResult } from './types';
 import { APP_CONFIG } from './config/appConfig';
+import { moveLocationToPrimary, persistDefaultLocation, readStoredDefaultLocation } from './utils/defaultLocation';
 
 // Default initial location: Bengaluru, India
 const DEFAULT_LOCATIONS: GeoLocationItem[] = [
@@ -53,7 +54,9 @@ export const App: React.FC = () => {
   useEffect(() => {
     async function init() {
       setIsInitialLoading(true);
-      const initialStates = await Promise.all(DEFAULT_LOCATIONS.map(loadLocationData));
+      const savedDefault = readStoredDefaultLocation(window.localStorage);
+      const initialLocations = savedDefault ? [savedDefault] : DEFAULT_LOCATIONS;
+      const initialStates = await Promise.all(initialLocations.map(loadLocationData));
       setLocations(initialStates);
       setIsInitialLoading(false);
     }
@@ -87,6 +90,18 @@ export const App: React.FC = () => {
     });
   };
 
+  const handleChangeDefaultLocation = async (locItem: GeoLocationItem): Promise<AddLocationResult> => {
+    const existing = locations.find(location => location.location.id === locItem.id);
+    const nextState = existing || await loadLocationData(locItem);
+
+    if (nextState.error || nextState.hourlySlots.length === 0) {
+      return nextState.error || `No forecast data was returned for ${locItem.name}.`;
+    }
+
+    setLocations(prev => moveLocationToPrimary(prev, nextState, APP_CONFIG.maxLocations));
+    persistDefaultLocation(locItem, window.localStorage);
+  };
+
   const handleRefresh = async () => {
     const refreshed = await Promise.all(locations.map(l => loadLocationData(l.location)));
     setLocations(refreshed);
@@ -115,6 +130,7 @@ export const App: React.FC = () => {
                 onRefresh={handleRefresh}
                 onNavigateToPlanner={() => setActiveTab("planner")}
                 onNavigateToCompare={() => setActiveTab("compare")}
+                onChangeDefaultLocation={handleChangeDefaultLocation}
               />
             )}
 
